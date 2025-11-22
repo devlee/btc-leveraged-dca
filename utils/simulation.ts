@@ -21,6 +21,11 @@ export const runSimulation = (
     
     let action: 'OPEN' | 'ADD' | 'HOLD' | 'LIQUIDATED' = 'HOLD';
     let btcAdded = 0;
+    let actionReason = "";
+
+    // Capture state BEFORE any action this week
+    const preActionHoldings = btcHoldings;
+    const preActionCostBasis = btcHoldings > 0 ? totalCostBasisUSD / btcHoldings : 0;
 
     // Safety check for invalid input during manual typing
     if (!currentPrice || currentPrice <= 0) {
@@ -31,6 +36,9 @@ export const runSimulation = (
         lowPrice: 0,
         action: 'HOLD',
         btcAdded: 0,
+        actionReason: "Waiting for price input",
+        preActionHoldings,
+        preActionCostBasis,
         totalBtcHoldings: btcHoldings,
         costBasis: btcHoldings > 0 ? totalCostBasisUSD / btcHoldings : 0,
         positionValue: 0,
@@ -53,6 +61,9 @@ export const runSimulation = (
         lowPrice: lowPrice,
         action: 'LIQUIDATED',
         btcAdded: 0,
+        actionReason: "Account previously liquidated",
+        preActionHoldings,
+        preActionCostBasis,
         totalBtcHoldings: 0,
         costBasis: 0,
         positionValue: 0,
@@ -78,6 +89,7 @@ export const runSimulation = (
       
       action = 'OPEN';
       btcAdded = btcHoldings;
+      actionReason = `Initial entry. Leverage set to ${params.leverage}x.`;
 
       // Immediate Risk Check on Week 1 Low
       const posValueAtLow = btcHoldings * lowPrice;
@@ -91,6 +103,7 @@ export const runSimulation = (
         debt = 0;
         totalCostBasisUSD = 0;
         action = 'LIQUIDATED';
+        actionReason = "Liquidated immediately due to Week 1 low price.";
       }
 
     } else {
@@ -110,6 +123,7 @@ export const runSimulation = (
         debt = 0;
         totalCostBasisUSD = 0;
         action = 'LIQUIDATED';
+        actionReason = equityAtLow <= 0 ? "Equity hit 0 at weekly low." : `Leverage (${levAtLow.toFixed(2)}x) exceeded max (${params.maxLeverage}x) at weekly low.`;
       } else {
         // B. STRATEGY CHECK (Based on OPEN Price - Standard Mark to Market)
         // If we survived the low, we proceed to check if we should ADD based on the "close/open" price
@@ -122,6 +136,13 @@ export const runSimulation = (
         
         const hasFloatingProfit = equity > params.initialCapital;
         
+        // Determine default reason for holding
+        if (!hasFloatingProfit) {
+            actionReason = `PnL ≤ 0 (Equity: $${Math.round(equity).toLocaleString()}). Strategy only adds when in profit.`;
+        } else if (currentLeverage >= params.leverage) {
+            actionReason = `Current Lev (${currentLeverage.toFixed(2)}x) ≥ Target (${params.leverage}x). No need to add.`;
+        }
+
         // We only ADD position to restore leverage if we are profitable.
         if (hasFloatingProfit && currentLeverage < params.leverage) {
           const targetPosition = equity * params.leverage;
@@ -137,12 +158,14 @@ export const runSimulation = (
             
             btcAdded = btcToBuy;
             action = 'ADD';
+            actionReason = `Profit detected. Lev dropped to ${currentLeverage.toFixed(2)}x. Rebalancing to ${params.leverage}x.`;
           }
         }
       }
     }
 
     // 2. Final State for Week (Reported)
+    // UPDATED: All reported values are now based on the WEEKLY LOW PRICE
     let finalPositionValue = 0;
     let finalLeverage = 0;
     let floatingPnL = 0;
@@ -153,7 +176,8 @@ export const runSimulation = (
         floatingPnL = -params.initialCapital;
         finalCostBasis = 0;
     } else {
-        finalPositionValue = btcHoldings * currentPrice;
+        // Use lowPrice for final reporting to show worst-case scenario for the week
+        finalPositionValue = btcHoldings * lowPrice; 
         equity = finalPositionValue - debt;
         finalLeverage = equity > 0 ? finalPositionValue / equity : 0;
         floatingPnL = equity - params.initialCapital;
@@ -165,9 +189,9 @@ export const runSimulation = (
     if (isLiquidated) {
       nextMsg = `Liquidated at Low: $${lowPrice}`;
     } else if (equity > params.initialCapital) {
-      nextMsg = `In Profit. Will add pos to maintain ${params.leverage}x lev.`;
+      nextMsg = `In Profit (at Low). Maintaining strategy.`;
     } else {
-      nextMsg = "In Loss. Holding position.";
+      nextMsg = "In Loss (at Low). Holding position.";
     }
 
     results.push({
@@ -177,6 +201,9 @@ export const runSimulation = (
       lowPrice: lowPrice,
       action,
       btcAdded,
+      actionReason,
+      preActionHoldings,
+      preActionCostBasis,
       totalBtcHoldings: btcHoldings,
       costBasis: finalCostBasis,
       positionValue: finalPositionValue,

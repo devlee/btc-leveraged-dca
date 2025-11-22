@@ -21,6 +21,7 @@ const ResultsTable: React.FC<Props> = ({
   onMaxLeverageChange
 }) => {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [tooltip, setTooltip] = useState<{ x: number, y: number, row: WeeklyResult } | null>(null);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -47,15 +48,114 @@ const ResultsTable: React.FC<Props> = ({
     setSelectedIndices(new Set()); // Clear selection after delete
   };
 
+  const handleMouseEnterAction = (e: React.MouseEvent, row: WeeklyResult) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({
+        x: rect.left + (rect.width / 2),
+        y: rect.top, 
+        row
+    });
+  };
+
+  const handleMouseLeaveAction = () => {
+    setTooltip(null);
+  };
+
   const isAllSelected = data.length > 0 && selectedIndices.size === data.length;
   const isIndeterminate = selectedIndices.size > 0 && selectedIndices.size < data.length;
 
   return (
-    <div className="bg-slate-800 rounded-xl shadow-lg border border-slate-700 overflow-hidden">
+    <div className="bg-slate-800 rounded-xl shadow-lg border border-slate-700 overflow-hidden relative">
+      {/* Tooltip Portal */}
+      {tooltip && (
+        <div 
+            className="fixed z-[9999] bg-slate-800 border border-slate-600 rounded-lg shadow-2xl p-3 text-xs w-64 pointer-events-none backdrop-blur-md bg-slate-800/95"
+            style={{ 
+                left: tooltip.x, 
+                top: tooltip.y - 10, 
+                transform: 'translate(-50%, -100%)' 
+            }}
+        >
+            <div className="font-bold text-slate-200 mb-2 pb-1 border-b border-slate-700 flex justify-between">
+                <span>Action Details</span>
+                <span className={`uppercase ${tooltip.row.action === 'ADD' ? 'text-emerald-400' : tooltip.row.action === 'HOLD' ? 'text-slate-400' : 'text-blue-400'}`}>
+                    {tooltip.row.action}
+                </span>
+            </div>
+
+            {tooltip.row.action === 'ADD' && (
+                <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-1 text-[10px] text-slate-400 mb-1">
+                        <span>Step</span>
+                        <span className="text-right">BTC</span>
+                        <span className="text-right">Avg Price</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-1 items-center">
+                        <span className="text-slate-500">Before:</span>
+                        <span className="text-right font-mono text-slate-300">{tooltip.row.preActionHoldings?.toFixed(4)}</span>
+                        <span className="text-right font-mono text-indigo-300">${Math.round(tooltip.row.preActionCostBasis || 0).toLocaleString()}</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1 items-center">
+                        <span className="text-emerald-400 font-bold">Buy:</span>
+                        <span className="text-right font-mono text-emerald-400">+{tooltip.row.btcAdded.toFixed(4)}</span>
+                        <span className="text-right font-mono text-emerald-400">@ ${tooltip.row.openPrice.toLocaleString()}</span>
+                    </div>
+                    
+                    <div className="border-t border-slate-700 my-1"></div>
+
+                    <div className="grid grid-cols-3 gap-1 items-center font-bold">
+                        <span className="text-slate-200">After:</span>
+                        <span className="text-right font-mono text-slate-100">{tooltip.row.totalBtcHoldings.toFixed(4)}</span>
+                        {/* Note: The row.costBasis in data is based on final reporting which might be same as this if no liquidations */}
+                        <span className="text-right font-mono text-indigo-300">
+                             ${Math.round(((tooltip.row.preActionCostBasis! * tooltip.row.preActionHoldings!) + (tooltip.row.btcAdded * tooltip.row.openPrice)) / tooltip.row.totalBtcHoldings).toLocaleString()}
+                        </span>
+                    </div>
+                    <div className="mt-2 text-[10px] text-slate-500 italic leading-tight">
+                        {tooltip.row.actionReason}
+                    </div>
+                </div>
+            )}
+
+            {tooltip.row.action === 'HOLD' && (
+                <div>
+                    <p className="text-slate-300 mb-1">Logic:</p>
+                    <p className="text-slate-400 italic leading-relaxed">
+                        {tooltip.row.actionReason || "Maintained current position."}
+                    </p>
+                </div>
+            )}
+
+            {tooltip.row.action === 'OPEN' && (
+                <div className="space-y-2">
+                     <div className="grid grid-cols-3 gap-1 items-center">
+                        <span className="text-blue-400 font-bold">Buy:</span>
+                        <span className="text-right font-mono text-blue-400">{tooltip.row.btcAdded.toFixed(4)}</span>
+                        <span className="text-right font-mono text-blue-400">@ ${tooltip.row.openPrice.toLocaleString()}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic mt-2">
+                        {tooltip.row.actionReason}
+                    </p>
+                </div>
+            )}
+
+             {tooltip.row.action === 'LIQUIDATED' && (
+                <div>
+                    <p className="text-rose-400 font-bold mb-1">Position Liquidated</p>
+                    <p className="text-slate-400 italic leading-relaxed">
+                        {tooltip.row.actionReason}
+                    </p>
+                </div>
+            )}
+        </div>
+      )}
+
       <div className="p-4 border-b border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
           <h3 className="text-lg font-bold text-slate-200">Weekly Ledger</h3>
-          <span className="text-xs text-slate-400 italic">Based on USDT-Margined Futures Logic</span>
+          <span className="text-xs text-slate-400 italic">Stats based on Weekly Low Price (Conservative)</span>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
           {selectedIndices.size > 0 && (
@@ -115,12 +215,12 @@ const ResultsTable: React.FC<Props> = ({
               <th className="px-4 py-3 text-right">Added BTC</th>
               <th className="px-4 py-3 text-right">Total BTC</th>
               <th className="px-4 py-3 text-right text-indigo-300">Avg Price</th>
-              <th className="px-4 py-3 text-right">Pos Value</th>
+              <th className="px-4 py-3 text-right">Pos Value (Low)</th>
               <th className="px-4 py-3 text-right">Debt</th>
-              <th className="px-4 py-3 text-right text-indigo-400">Equity</th>
+              <th className="px-4 py-3 text-right text-indigo-400">Equity (Low)</th>
               <th className="px-4 py-3 text-center">
                 <div className="flex flex-col items-center">
-                  <span>Lev</span>
+                  <span>Lev (Low)</span>
                   <div className="flex items-center gap-1 mt-1">
                      <span className="text-[10px] text-slate-500 font-normal lowercase">max:</span>
                      <input 
@@ -133,7 +233,7 @@ const ResultsTable: React.FC<Props> = ({
                   </div>
                 </div>
               </th>
-              <th className="px-4 py-3 text-right">Floating PnL</th>
+              <th className="px-4 py-3 text-right">Floating PnL (Low)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
@@ -198,8 +298,12 @@ const ResultsTable: React.FC<Props> = ({
                     </div>
                   </td>
                   
-                  <td className={`px-4 py-3 text-center ${actionColor}`}>
-                    {row.action}
+                  <td 
+                    className={`px-4 py-3 text-center cursor-help ${actionColor}`}
+                    onMouseEnter={(e) => handleMouseEnterAction(e, row)}
+                    onMouseLeave={handleMouseLeaveAction}
+                  >
+                    <span className="border-b border-dashed border-current/30 pb-0.5">{row.action}</span>
                   </td>
                   
                   <td className="px-4 py-3 text-right font-mono text-emerald-300/80">

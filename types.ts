@@ -20,7 +20,12 @@ export interface WeeklyResult {
   // Action taken
   action: 'OPEN' | 'ADD' | 'HOLD' | 'LIQUIDATED';
   btcAdded: number;
-  
+  actionReason?: string; // Logic explanation for the action
+
+  // State BEFORE action (for tooltip)
+  preActionHoldings?: number;
+  preActionCostBasis?: number;
+
   // Snapshot AFTER action
   totalBtcHoldings: number;
   costBasis: number;     // Average entry price

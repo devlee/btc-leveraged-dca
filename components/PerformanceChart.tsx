@@ -10,6 +10,67 @@ interface Props {
   onRestartFromLowest: () => void;
 }
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const isProfit = data.floatingPnL >= 0;
+    
+    let actionColor = 'text-slate-500';
+    if (data.action === 'OPEN') actionColor = 'text-blue-400 font-bold';
+    if (data.action === 'ADD') actionColor = 'text-emerald-400 font-bold';
+    if (data.action === 'LIQUIDATED') actionColor = 'text-red-500 font-bold';
+
+    return (
+      <div className="bg-slate-800 border border-slate-600 p-4 rounded-lg shadow-xl text-xs min-w-[260px] z-50 backdrop-blur-sm bg-slate-800/95">
+        <div className="font-bold text-slate-100 mb-2 border-b border-slate-700 pb-2 flex justify-between items-center">
+            <span>{label}</span>
+            <span className="text-slate-500 font-normal">Week {data.weekIndex}</span>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+            {/* Market Data */}
+            <div className="text-slate-400">Open Price:</div>
+            <div className="text-right font-mono text-slate-200">${data.openPrice?.toLocaleString()}</div>
+
+            <div className="text-rose-400">Low Price:</div>
+            <div className="text-right font-mono text-rose-300">${data.lowPrice?.toLocaleString()}</div>
+
+            {/* Action & Holdings */}
+            <div className="text-slate-400">Action:</div>
+            <div className={`text-right ${actionColor}`}>{data.action}</div>
+
+            <div className="text-slate-400">BTC Held:</div>
+            <div className="text-right font-mono text-slate-200">{data.totalBtcHoldings?.toFixed(4)}</div>
+            
+            <div className="text-indigo-300">Avg Price:</div>
+            <div className="text-right font-mono text-indigo-300">${Math.round(data.costBasis || 0).toLocaleString()}</div>
+
+            <div className="col-span-2 border-t border-slate-700 my-1"></div>
+
+            {/* Financials (Low) */}
+            <div className="text-slate-400">Pos Value (Low):</div>
+            <div className="text-right font-mono text-indigo-400">${Math.round(data.positionValue).toLocaleString()}</div>
+
+            <div className="text-slate-400">Debt:</div>
+            <div className="text-right font-mono text-slate-500">-${Math.round(data.debt).toLocaleString()}</div>
+
+            <div className="text-slate-400">Equity (Low):</div>
+            <div className="text-right font-mono text-emerald-400">${Math.round(data.equity).toLocaleString()}</div>
+            
+            <div className="text-slate-400">Lev (Low):</div>
+            <div className="text-right font-mono text-orange-300">{data.leverage?.toFixed(2)}x</div>
+
+             <div className="text-slate-400">PnL (Low):</div>
+            <div className={`text-right font-mono font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {isProfit ? '+' : ''}{Math.round(data.floatingPnL).toLocaleString()}
+            </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeChange, onRestartFromLowest }) => {
   
   // Process chart data
@@ -146,10 +207,7 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
               tick={{fontSize: 12}}
               tickFormatter={(value) => `$${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`}
             />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-              formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name]}
-            />
+            <Tooltip content={<CustomTooltip />} />
             <Legend verticalAlign="top" height={36} />
             
             <Area 
