@@ -1,0 +1,5 @@
+{
+  "name": "BTC Smart DCA Backtester",
+  "description": "A Bitcoin investment simulator that analyzes 52-week historical data. It allows users to test dynamic Dollar Cost Averaging (DCA) strategies based on floating profit and loss.",
+  "requestFramePermissions": []
+}

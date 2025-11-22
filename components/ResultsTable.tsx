@@ -1,0 +1,246 @@
+import React, { useState } from 'react';
+import { WeeklyResult, WeeklyPrice } from '../types';
+
+interface Props {
+  data: WeeklyResult[];
+  onAddPreviousWeek: () => void;
+  onAddNextWeek: () => void;
+  onRowUpdate: (index: number, field: keyof WeeklyPrice, value: any) => void;
+  onDeleteRows: (indices: number[]) => void;
+  maxLeverage: number;
+  onMaxLeverageChange: (val: number) => void;
+}
+
+const ResultsTable: React.FC<Props> = ({ 
+  data, 
+  onAddPreviousWeek, 
+  onAddNextWeek, 
+  onRowUpdate, 
+  onDeleteRows,
+  maxLeverage,
+  onMaxLeverageChange
+}) => {
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const allIndices = data.map((_, i) => i);
+      setSelectedIndices(new Set(allIndices));
+    } else {
+      setSelectedIndices(new Set());
+    }
+  };
+
+  const handleSelectRow = (index: number) => {
+    const newSelected = new Set(selectedIndices);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedIndices(newSelected);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIndices.size === 0) return;
+    onDeleteRows(Array.from(selectedIndices));
+    setSelectedIndices(new Set()); // Clear selection after delete
+  };
+
+  const isAllSelected = data.length > 0 && selectedIndices.size === data.length;
+  const isIndeterminate = selectedIndices.size > 0 && selectedIndices.size < data.length;
+
+  return (
+    <div className="bg-slate-800 rounded-xl shadow-lg border border-slate-700 overflow-hidden">
+      <div className="p-4 border-b border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h3 className="text-lg font-bold text-slate-200">Weekly Ledger</h3>
+          <span className="text-xs text-slate-400 italic">Based on USDT-Margined Futures Logic</span>
+        </div>
+        <div className="flex gap-2 flex-wrap justify-end">
+          {selectedIndices.size > 0 && (
+            <button 
+              onClick={handleDeleteSelected}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-sm font-semibold shadow-md transition-colors flex items-center space-x-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>Delete ({selectedIndices.size})</span>
+            </button>
+          )}
+
+          <button 
+            onClick={onAddPreviousWeek}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold shadow-md transition-colors flex items-center space-x-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <span>Add Previous Week</span>
+          </button>
+          
+          <button 
+            onClick={onAddNextWeek}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold shadow-md transition-colors flex items-center space-x-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <span>Add Next Week</span>
+          </button>
+        </div>
+      </div>
+      
+      <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+        <table className="w-full text-sm text-left text-slate-300 whitespace-nowrap">
+          <thead className="text-xs text-slate-400 uppercase bg-slate-900 sticky top-0 z-10 shadow-md">
+            <tr>
+              <th className="px-4 py-3 text-center w-10">
+                <input 
+                  type="checkbox" 
+                  className="rounded bg-slate-700 border-slate-600 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                  checked={isAllSelected}
+                  ref={input => {
+                    if (input) input.indeterminate = isIndeterminate;
+                  }}
+                  onChange={handleSelectAll}
+                />
+              </th>
+              <th className="px-4 py-3 text-center">Wk</th>
+              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3 w-28">Open Price</th>
+              <th className="px-4 py-3 w-28 text-rose-300">Low Price</th>
+              <th className="px-4 py-3 text-center">Action</th>
+              <th className="px-4 py-3 text-right">Added BTC</th>
+              <th className="px-4 py-3 text-right">Total BTC</th>
+              <th className="px-4 py-3 text-right text-indigo-300">Avg Price</th>
+              <th className="px-4 py-3 text-right">Pos Value</th>
+              <th className="px-4 py-3 text-right">Debt</th>
+              <th className="px-4 py-3 text-right text-indigo-400">Equity</th>
+              <th className="px-4 py-3 text-center">
+                <div className="flex flex-col items-center">
+                  <span>Lev</span>
+                  <div className="flex items-center gap-1 mt-1">
+                     <span className="text-[10px] text-slate-500 font-normal lowercase">max:</span>
+                     <input 
+                      type="number"
+                      min="1"
+                      value={maxLeverage}
+                      onChange={(e) => onMaxLeverageChange(Number(e.target.value))}
+                      className="w-10 bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-center text-white focus:border-indigo-500 outline-none"
+                     />
+                  </div>
+                </div>
+              </th>
+              <th className="px-4 py-3 text-right">Floating PnL</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-700">
+            {data.map((row, index) => {
+              const isProfit = row.floatingPnL >= 0;
+              const isLiq = row.isLiquidated;
+              const isSelected = selectedIndices.has(index);
+              
+              let actionColor = 'text-slate-400';
+              if (row.action === 'OPEN') actionColor = 'text-blue-400 font-bold';
+              if (row.action === 'ADD') actionColor = 'text-emerald-400 font-bold';
+              if (row.action === 'LIQUIDATED') actionColor = 'text-red-500 font-bold bg-red-900/20';
+
+              // Check if high lev based on current snapshot
+              const isHighLev = row.leverage > 5;
+
+              return (
+                <tr 
+                  key={row.date + index} 
+                  className={`transition-colors ${isLiq ? 'opacity-50' : ''} ${isSelected ? 'bg-indigo-900/30' : 'hover:bg-slate-700/50'}`}
+                >
+                  <td className="px-4 py-3 text-center">
+                    <input 
+                      type="checkbox"
+                      className="rounded bg-slate-700 border-slate-600 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                      checked={isSelected}
+                      onChange={() => handleSelectRow(index)}
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-center font-medium text-slate-500">{row.weekIndex}</td>
+                  <td className="px-4 py-3 text-slate-400">{new Date(row.date).toLocaleDateString()}</td>
+                  
+                  {/* Editable Open Price Input */}
+                  <td className="px-4 py-3">
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.openPrice === 0 ? '' : row.openPrice}
+                        onChange={(e) => onRowUpdate(index, 'openPrice', parseFloat(e.target.value) || 0)}
+                        className="w-24 bg-slate-900 border border-slate-600 rounded px-2 py-1 pl-4 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-right font-mono text-xs"
+                        placeholder="Open"
+                      />
+                    </div>
+                  </td>
+
+                  {/* Editable Low Price Input */}
+                  <td className="px-4 py-3">
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-rose-900 text-xs">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.lowPrice === 0 ? '' : row.lowPrice}
+                        onChange={(e) => onRowUpdate(index, 'lowPrice', parseFloat(e.target.value) || 0)}
+                        className="w-24 bg-slate-900 border border-rose-900/50 rounded px-2 py-1 pl-4 text-rose-200 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none text-right font-mono text-xs"
+                        placeholder="Low"
+                      />
+                    </div>
+                  </td>
+                  
+                  <td className={`px-4 py-3 text-center ${actionColor}`}>
+                    {row.action}
+                  </td>
+                  
+                  <td className="px-4 py-3 text-right font-mono text-emerald-300/80">
+                    {row.btcAdded > 0 ? `+${row.btcAdded.toFixed(4)}` : '-'}
+                  </td>
+                  
+                  <td className="px-4 py-3 text-right font-mono text-slate-200">
+                    {row.totalBtcHoldings.toFixed(4)}
+                  </td>
+                  
+                  <td className="px-4 py-3 text-right font-mono text-indigo-300/80">
+                     ${Math.round(row.costBasis).toLocaleString()}
+                  </td>
+
+                  <td className="px-4 py-3 text-right font-mono text-slate-400">
+                    ${Math.round(row.positionValue).toLocaleString()}
+                  </td>
+
+                  <td className="px-4 py-3 text-right font-mono text-slate-500">
+                    -${Math.round(row.debt).toLocaleString()}
+                  </td>
+                  
+                  <td className="px-4 py-3 text-right font-mono font-bold text-indigo-400">
+                    ${Math.round(row.equity).toLocaleString()}
+                  </td>
+                  
+                  <td className={`px-4 py-3 text-center font-mono ${isHighLev ? 'text-orange-400' : 'text-slate-400'}`}>
+                    {row.leverage.toFixed(2)}x
+                  </td>
+                  
+                  <td className={`px-4 py-3 text-right font-bold font-mono ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {isProfit ? '+' : ''}{Math.round(row.floatingPnL).toLocaleString()}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default ResultsTable;
