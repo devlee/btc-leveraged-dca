@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { WeeklyPrice } from '../types';
 
@@ -26,6 +27,7 @@ const DataImport: React.FC<Props> = ({ onImport }) => {
         
         const timestamp = item[0];
         const priceStr = item[1]; // Open
+        const highPriceStr = item[2]; // High (3rd element)
         const lowPriceStr = item[3]; // Low (4th element)
         
         // Check validation
@@ -40,13 +42,20 @@ const DataImport: React.FC<Props> = ({ onImport }) => {
             lowPrice = parseFloat(Number(lowPriceStr).toFixed(2));
         }
 
+        // Default highPrice to openPrice if missing
+        let highPrice = openPrice;
+        if (highPriceStr !== undefined) {
+            highPrice = parseFloat(Number(highPriceStr).toFixed(2));
+        }
+
         if (isNaN(openPrice)) throw new Error(`Invalid price format at index ${index}`);
 
         return {
           weekIndex: 0, // Will be re-indexed by logic later
           date,
           openPrice,
-          lowPrice
+          lowPrice,
+          highPrice
         };
       });
 
@@ -66,7 +75,7 @@ const DataImport: React.FC<Props> = ({ onImport }) => {
       
       <p className="text-xs text-slate-400 mb-3">
         Paste a JSON array of arrays. Expected format: <code className="bg-slate-900 px-1 rounded text-indigo-300">[timestamp, "open", "high", "low", "close"...]</code>. 
-        The 4th element (index 3) will be used as the Low Price.
+        <br/>Index 2 is High, Index 3 is Low.
       </p>
       
       <textarea

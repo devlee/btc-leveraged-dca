@@ -43,10 +43,11 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Backwards compatibility: ensure lowPrice exists
+        // Backwards compatibility: ensure lowPrice and highPrice exist
         return parsed.map((p: any) => ({
           ...p,
-          lowPrice: p.lowPrice !== undefined ? p.lowPrice : p.openPrice
+          lowPrice: p.lowPrice !== undefined ? p.lowPrice : p.openPrice,
+          highPrice: p.highPrice !== undefined ? p.highPrice : p.openPrice
         }));
       } catch (e) {
         console.error("Failed to parse saved prices", e);
@@ -64,7 +65,8 @@ const App: React.FC = () => {
       weekIndex: 1,
       date: dateStr,
       openPrice: 0,
-      lowPrice: 0
+      lowPrice: 0,
+      highPrice: 0
     }];
   });
 
@@ -134,7 +136,8 @@ const App: React.FC = () => {
         weekIndex: 0, 
         date: newDateStr,
         openPrice: 0,
-        lowPrice: 0
+        lowPrice: 0,
+        highPrice: 0
       };
 
       setSliderRange(r => [r[0] + 1, r[1] + 1]);
@@ -161,7 +164,8 @@ const App: React.FC = () => {
         weekIndex: 0, 
         date: newDateStr,
         openPrice: 0,
-        lowPrice: 0
+        lowPrice: 0,
+        highPrice: 0
       };
       
       setSliderRange(r => {
@@ -227,7 +231,7 @@ const App: React.FC = () => {
       const monday = new Date(today.setDate(diff));
       const dateStr = monday.toISOString().split('T')[0];
 
-      const defaultData = [{ weekIndex: 1, date: dateStr, openPrice: 0, lowPrice: 0 }];
+      const defaultData = [{ weekIndex: 1, date: dateStr, openPrice: 0, lowPrice: 0, highPrice: 0 }];
       setPriceData(defaultData);
       setSliderRange([0, 0]);
     }

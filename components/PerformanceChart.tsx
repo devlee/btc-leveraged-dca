@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { ComposedChart, Area, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { WeeklyResult, WeeklyPrice } from '../types';
@@ -41,6 +42,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
             <div className="text-rose-400">Low Price:</div>
             <div className="text-right font-mono text-rose-300">${data.lowPrice?.toLocaleString()}</div>
+            
+            <div className="text-emerald-400">High Price:</div>
+            <div className="text-right font-mono text-emerald-300">${data.highPrice?.toLocaleString()}</div>
 
             {/* Action & Holdings */}
             <div className="text-slate-400">Action:</div>
@@ -55,17 +59,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             <div className="col-span-2 border-t border-slate-700 my-1"></div>
 
             {/* Financials (Low) */}
-            <div className="text-slate-400">Pos Value (Low):</div>
-            <div className="text-right font-mono text-indigo-400">${Math.round(data.positionValue).toLocaleString()}</div>
+            <div className="text-slate-400">Pos Value (Range):</div>
+            <div className="text-right font-mono text-indigo-400">
+                ${Math.round(data.positionValue).toLocaleString()} - ${Math.round(data.positionValueHigh).toLocaleString()}
+            </div>
 
             <div className="text-slate-400">Debt:</div>
             <div className="text-right font-mono text-slate-500">-${Math.round(data.debt).toLocaleString()}</div>
 
-            <div className="text-slate-400">Equity (Low):</div>
-            <div className="text-right font-mono text-emerald-400">${Math.round(data.equity).toLocaleString()}</div>
+            <div className="text-slate-400">Equity (Range):</div>
+            <div className="text-right font-mono text-emerald-400">
+                ${Math.round(data.equity).toLocaleString()} - ${Math.round(data.equityHigh).toLocaleString()}
+            </div>
             
-            <div className="text-slate-400">Lev (Low):</div>
-            <div className="text-right font-mono text-orange-300">{data.leverage?.toFixed(2)}x</div>
+            <div className="text-slate-400">Lev (Low-High):</div>
+            <div className="text-right font-mono text-orange-300">{data.leverageHigh?.toFixed(2)}x - {data.leverage?.toFixed(2)}x</div>
 
              <div className="text-slate-400">PnL (Low):</div>
             <div className={`text-right font-mono font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -82,14 +90,21 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
   
   // Process chart data
   const formattedData = useMemo(() => {
-    return results.map(d => ({
-      ...d,
-      // We keep dateShort for potential other uses, but XAxis will use 'date' (ISO)
-      dateShort: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      Equity: Math.round(d.equity),
-      Position: Math.round(d.positionValue),
-      PnL: Math.round(d.floatingPnL)
-    }));
+    return results.map(d => {
+        // Calculate equity volatility
+        const eqLow = Math.round(d.equity);
+        const eqHigh = Math.round(d.equityHigh);
+        const eqDiff = Math.max(0, eqHigh - eqLow);
+
+        return {
+            ...d,
+            dateShort: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+            EquityLow: eqLow,
+            EquityDiff: eqDiff, // The "range" part for the stack
+            Position: Math.round(d.positionValue),
+            PnL: Math.round(d.floatingPnL)
+        };
+    });
   }, [results]);
 
   // Calculate lowest price in the *full* dataset to enable the button if needed
@@ -185,10 +200,6 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={formattedData}>
             <defs>
-              <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-              </linearGradient>
               <linearGradient id="colorPosition" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
@@ -196,7 +207,7 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
             <XAxis 
-              dataKey="date" // Changed from dateShort to unique ISO date
+              dataKey="date" 
               stroke="#94a3b8" 
               tick={{fontSize: 12}} 
               minTickGap={30}
@@ -228,22 +239,31 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
               fillOpacity={1} 
               fill="url(#colorPosition)" 
             />
-            <Area 
-              yAxisId="left"
-              type="monotone" 
-              dataKey="Equity" 
-              name="User Equity"
-              stroke="#10b981" 
-              strokeWidth={2}
-              fillOpacity={1} 
-              fill="url(#colorEquity)" 
-              activeDot={{ r: 6 }}
+            
+            {/* Stacked Bar for Equity Range */}
+            <Bar 
+                yAxisId="left"
+                dataKey="EquityLow"
+                stackId="equity"
+                name="Equity Low"
+                fill="transparent" 
+                stroke="transparent"
+                // This makes the base invisible so the 'Diff' floats on top
             />
+            <Bar 
+                yAxisId="left"
+                dataKey="EquityDiff"
+                stackId="equity"
+                name="Equity Volatility Range"
+                fill="#10b981" 
+                fillOpacity={0.6}
+            />
+
             <Bar 
               yAxisId="right"
               dataKey="PnL"
               name="Floating PnL"
-              barSize={20}
+              barSize={10}
               opacity={0.8}
             >
               {formattedData.map((entry, index) => (

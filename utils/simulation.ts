@@ -23,6 +23,8 @@ export const runSimulation = (
     const currentPrice = week.openPrice;
     // Use lowPrice if available, otherwise fallback to currentPrice
     const lowPrice = week.lowPrice && week.lowPrice > 0 ? week.lowPrice : currentPrice;
+    // Use highPrice if available, otherwise fallback to max(current, low)
+    const highPrice = week.highPrice && week.highPrice > 0 ? week.highPrice : Math.max(currentPrice, lowPrice);
     
     let action: 'OPEN' | 'ADD' | 'HOLD' | 'LIQUIDATED' = 'HOLD';
     let btcAdded = 0;
@@ -41,6 +43,7 @@ export const runSimulation = (
         date: week.date,
         openPrice: 0,
         lowPrice: 0,
+        highPrice: 0,
         action: 'HOLD',
         btcAdded: 0,
         actionReason: "Waiting for price input",
@@ -53,6 +56,10 @@ export const runSimulation = (
         equity,
         leverage: 0,
         floatingPnL: equity - params.initialCapital,
+        positionValueHigh: 0,
+        equityHigh: equity,
+        leverageHigh: 0,
+        floatingPnLHigh: equity - params.initialCapital,
         isLiquidated,
         nextWeekCondition: "Waiting for price input..."
       });
@@ -66,6 +73,7 @@ export const runSimulation = (
         date: week.date,
         openPrice: currentPrice,
         lowPrice: lowPrice,
+        highPrice: highPrice,
         action: 'LIQUIDATED',
         btcAdded: 0,
         actionReason: "Account previously liquidated",
@@ -78,6 +86,10 @@ export const runSimulation = (
         equity: 0,
         leverage: 0,
         floatingPnL: -params.initialCapital,
+        positionValueHigh: 0,
+        equityHigh: 0,
+        leverageHigh: 0,
+        floatingPnLHigh: -params.initialCapital,
         isLiquidated: true,
         nextWeekCondition: "Account Liquidated"
       });
@@ -99,8 +111,6 @@ export const runSimulation = (
       actionReason = `Initial entry. Leverage set to ${params.leverage}x.`;
 
       // Calculate Theoretical Liquidation Price (Post-Open)
-      // Liq when Equity <= 0 (Price <= Debt/Holdings) OR Lev >= MaxLev
-      // P_maxLev => Holdings * P / (Holdings*P - Debt) = MaxLev => P = (MaxLev * Debt) / (Holdings * (MaxLev - 1))
       const bankruptcyPrice = debt / btcHoldings;
       const maxLevPrice = (params.maxLeverage * debt) / (btcHoldings * (params.maxLeverage - 1));
       calculatedLiqPrice = Math.max(bankruptcyPrice, maxLevPrice);
@@ -120,10 +130,8 @@ export const runSimulation = (
       // Subsequent Weeks
 
       // 0. Calculate Liquidation Threshold (based on incoming state)
-      // This is the price that would have killed the position *before* any rebalancing.
       if (btcHoldings > 0) {
         const bankruptcyPrice = debt / btcHoldings;
-        // avoid divide by zero if maxLeverage is 1
         const maxLevPrice = params.maxLeverage > 1 
             ? (params.maxLeverage * debt) / (btcHoldings * (params.maxLeverage - 1))
             : bankruptcyPrice; 
@@ -131,29 +139,23 @@ export const runSimulation = (
       }
 
       // A. RISK CHECK (Liquidation logic based on WEEKLY LOW)
-      // We calculate what the account looks like at the lowest point of the week.
       const posValueAtLow = btcHoldings * lowPrice;
       const equityAtLow = posValueAtLow - debt;
       const levAtLow = equityAtLow > 0 ? posValueAtLow / equityAtLow : Infinity;
 
-      // Liquidation Check: Equity <= 0 OR Leverage (at Low) >= Max Leverage
+      // Liquidation Check
       if (equityAtLow <= 0 || levAtLow >= params.maxLeverage) {
         action = 'LIQUIDATED';
         actionReason = equityAtLow <= 0 ? "Equity hit 0 at weekly low." : `Leverage (${levAtLow.toFixed(2)}x) exceeded max (${params.maxLeverage}x) at weekly low.`;
         justLiquidated = true;
       } else {
-        // B. STRATEGY CHECK (Based on OPEN Price - Standard Mark to Market)
-        // If we survived the low, we proceed to check if we should ADD based on the "close/open" price
+        // B. STRATEGY CHECK (Based on OPEN Price)
         const positionValue = btcHoldings * currentPrice;
         equity = positionValue - debt;
         const currentLeverage = equity > 0 ? positionValue / equity : Infinity;
 
-        // Rule: If Floating Profit > 0 (Equity > Initial), Maintain Leverage n.
-        // Else: Hold.
-        
         const hasFloatingProfit = equity > params.initialCapital;
         
-        // Determine default reason for holding
         if (!hasFloatingProfit) {
             actionReason = `PnL ≤ 0 (Equity: $${Math.round(equity).toLocaleString()}). Strategy only adds when in profit.`;
         } else if (currentLeverage >= params.leverage) {
@@ -162,23 +164,17 @@ export const runSimulation = (
             actionReason = `Profitable, but Reinvestment Ratio is set to 0%. Holding.`;
         }
 
-        // We only ADD position to restore leverage if we are profitable.
+        // Add Logic
         if (hasFloatingProfit && currentLeverage < params.leverage && reinvestPercent > 0) {
           const targetPosition = equity * params.leverage;
           const rawDifference = targetPosition - positionValue;
-          
-          // Apply Reinvestment Ratio
-          // If ratio is 50%, we only buy 50% of the difference needed to reach target leverage.
           const difference = rawDifference * reinvestPercent;
 
           if (difference > 0) {
             const btcToBuy = difference / currentPrice;
             btcHoldings += btcToBuy;
-            debt += difference; // We borrow more to buy more
-            
-            // Update Cost Basis
+            debt += difference; 
             totalCostBasisUSD += (btcToBuy * currentPrice);
-            
             btcAdded = btcToBuy;
             action = 'ADD';
             
@@ -189,36 +185,25 @@ export const runSimulation = (
       }
     }
 
-    // 2. Final State for Week (Reported)
-    // UPDATED: All reported values are now based on the WEEKLY LOW PRICE
-    let finalPositionValue = 0;
-    let finalLeverage = 0;
-    let floatingPnL = 0;
-    let finalCostBasis = 0;
-    let reportedEquity = 0;
-
+    // 2. Final State for Week (Reported Ranges)
+    
+    // --- LOW SCENARIO ---
+    let finalPositionValue = btcHoldings * lowPrice;
+    let reportedEquity = finalPositionValue - debt;
+    // Handle liquidation reporting specifically
     if (justLiquidated) {
-        // SPECIAL CASE: The week we busted.
-        // We report the theoretical values that triggered the bust.
-        // posValue is based on Low. Debt is full debt. Equity is negative.
-        finalPositionValue = btcHoldings * lowPrice;
-        reportedEquity = finalPositionValue - debt;
-        // Prevent leverage division by zero or negative flip messiness, usually logic defines busted leverage as High or 0.
-        // We'll show the leverage that killed it (if equity > 0 but high) or just 0 if equity <= 0
-        finalLeverage = reportedEquity > 0 ? finalPositionValue / reportedEquity : 0; 
-        floatingPnL = reportedEquity - params.initialCapital;
-        finalCostBasis = btcHoldings > 0 ? totalCostBasisUSD / btcHoldings : 0;
-        
-        // Set the message
-        actionReason += ` (Debt: $${Math.round(debt)}, Pos: $${Math.round(finalPositionValue)})`;
-    } else {
-        // Normal survival case
-        finalPositionValue = btcHoldings * lowPrice; 
-        reportedEquity = finalPositionValue - debt;
-        finalLeverage = reportedEquity > 0 ? finalPositionValue / reportedEquity : 0;
-        floatingPnL = reportedEquity - params.initialCapital;
-        finalCostBasis = btcHoldings > 0 ? totalCostBasisUSD / btcHoldings : 0;
+        actionReason += ` (Debt: $${Math.round(debt)}, Pos Low: $${Math.round(finalPositionValue)})`;
     }
+    let finalLeverage = reportedEquity > 0 ? finalPositionValue / reportedEquity : 0;
+    let floatingPnL = reportedEquity - params.initialCapital;
+
+    // --- HIGH SCENARIO ---
+    let finalPositionValueHigh = btcHoldings * highPrice;
+    let reportedEquityHigh = finalPositionValueHigh - debt;
+    let finalLeverageHigh = reportedEquityHigh > 0 ? finalPositionValueHigh / reportedEquityHigh : 0;
+    let floatingPnLHigh = reportedEquityHigh - params.initialCapital;
+    
+    const finalCostBasis = btcHoldings > 0 ? totalCostBasisUSD / btcHoldings : 0;
 
     // Forecast / Logic Description
     let nextMsg = "";
@@ -235,6 +220,7 @@ export const runSimulation = (
       date: week.date,
       openPrice: currentPrice,
       lowPrice: lowPrice,
+      highPrice: highPrice,
       action,
       btcAdded,
       actionReason,
@@ -243,28 +229,31 @@ export const runSimulation = (
       theoreticalLiqPrice: calculatedLiqPrice,
       totalBtcHoldings: btcHoldings,
       costBasis: finalCostBasis,
+      
+      // Low Stats
       positionValue: finalPositionValue,
       debt,
       equity: reportedEquity,
       leverage: finalLeverage,
       floatingPnL,
+
+      // High Stats
+      positionValueHigh: finalPositionValueHigh,
+      equityHigh: reportedEquityHigh,
+      leverageHigh: finalLeverageHigh,
+      floatingPnLHigh,
+
       isLiquidated: justLiquidated || isLiquidated,
       nextWeekCondition: nextMsg
     });
 
-    // Post-reporting cleanup for next iteration
-    // If we just liquidated, the NEXT week starts with 0.
+    // Post-reporting cleanup
     if (justLiquidated) {
         isLiquidated = true;
         equity = 0;
         btcHoldings = 0;
         debt = 0;
         totalCostBasisUSD = 0;
-    } else {
-        // Update equity for next loop based on close price (which is next open)?
-        // Actually, the simulation variable 'equity' tracks the "strategy view" which is usually based on currentPrice.
-        // However, 'equity' variable is recalculated at start of next strategy block via (btcHoldings * currentPrice - debt).
-        // So we don't need to manually update `equity` here, just debt and btcHoldings persist.
     }
   }
 

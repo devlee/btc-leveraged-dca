@@ -4,6 +4,7 @@ export interface WeeklyPrice {
   date: string;
   openPrice: number;
   lowPrice: number;
+  highPrice: number;
 }
 
 export interface SimulationParams {
@@ -18,6 +19,7 @@ export interface WeeklyResult {
   date: string;
   openPrice: number;
   lowPrice: number;
+  highPrice: number;
   
   // Action taken
   action: 'OPEN' | 'ADD' | 'HOLD' | 'LIQUIDATED';
@@ -32,13 +34,20 @@ export interface WeeklyResult {
   // Snapshot AFTER action
   totalBtcHoldings: number;
   costBasis: number;     // Average entry price
-  positionValue: number; // Notional Value
-  debt: number;          // Borrowed/Margin used
-  equity: number;        // Position - Debt
-  leverage: number;      // Position / Equity
   
-  // Performance
-  floatingPnL: number;   // Equity - Initial
+  // Low Scenario (Conservative)
+  positionValue: number; // Notional Value at Low
+  debt: number;          // Borrowed/Margin used
+  equity: number;        // Position - Debt at Low
+  leverage: number;      // Position / Equity at Low
+  floatingPnL: number;   // Equity - Initial at Low
+  
+  // High Scenario (Best Case)
+  positionValueHigh: number;
+  equityHigh: number;
+  leverageHigh: number;
+  floatingPnLHigh: number;
+
   isLiquidated: boolean;
   
   // Forecast

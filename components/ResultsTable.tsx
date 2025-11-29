@@ -109,7 +109,6 @@ const ResultsTable: React.FC<Props> = ({
                     <div className="grid grid-cols-3 gap-1 items-center font-bold">
                         <span className="text-slate-200">After:</span>
                         <span className="text-right font-mono text-slate-100">{tooltip.row.totalBtcHoldings.toFixed(4)}</span>
-                        {/* Note: The row.costBasis in data is based on final reporting which might be same as this if no liquidations */}
                         <span className="text-right font-mono text-indigo-300">
                              ${Math.round(((tooltip.row.preActionCostBasis! * tooltip.row.preActionHoldings!) + (tooltip.row.btcAdded * tooltip.row.openPrice)) / tooltip.row.totalBtcHoldings).toLocaleString()}
                         </span>
@@ -164,7 +163,7 @@ const ResultsTable: React.FC<Props> = ({
       <div className="p-4 border-b border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
           <h3 className="text-lg font-bold text-slate-200">Weekly Ledger</h3>
-          <span className="text-xs text-slate-400 italic">Stats based on Weekly Low Price (Conservative)</span>
+          <span className="text-xs text-slate-400 italic">Metrics shown as ranges: Low Price Scenario - High Price Scenario</span>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
           {selectedIndices.size > 0 && (
@@ -220,16 +219,17 @@ const ResultsTable: React.FC<Props> = ({
               <th className="px-4 py-3">Date</th>
               <th className="px-4 py-3 w-28">Open Price</th>
               <th className="px-4 py-3 w-28 text-rose-300">Low Price</th>
+              <th className="px-4 py-3 w-28 text-emerald-300">High Price</th>
               <th className="px-4 py-3 text-center">Action</th>
               <th className="px-4 py-3 text-right">Added BTC</th>
               <th className="px-4 py-3 text-right">Total BTC</th>
               <th className="px-4 py-3 text-right text-indigo-300">Avg Price</th>
-              <th className="px-4 py-3 text-right">Pos Value (Low)</th>
+              <th className="px-4 py-3 text-right">Pos Value <span className="text-[10px] lowercase text-slate-500">(low-high)</span></th>
               <th className="px-4 py-3 text-right">Debt</th>
-              <th className="px-4 py-3 text-right text-indigo-400">Equity (Low)</th>
+              <th className="px-4 py-3 text-right text-indigo-400">Equity <span className="text-[10px] lowercase text-slate-500">(low-high)</span></th>
               <th className="px-4 py-3 text-center">
                 <div className="flex flex-col items-center">
-                  <span>Lev (Low)</span>
+                  <span>Lev <span className="text-[10px] lowercase text-slate-500">(low-high)</span></span>
                   <div className="flex items-center gap-1 mt-1">
                      <span className="text-[10px] text-slate-500 font-normal lowercase">max:</span>
                      <input 
@@ -242,7 +242,7 @@ const ResultsTable: React.FC<Props> = ({
                   </div>
                 </div>
               </th>
-              <th className="px-4 py-3 text-right">Floating PnL (Low)</th>
+              <th className="px-4 py-3 text-right">PnL <span className="text-[10px] lowercase text-slate-500">(low-high)</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
@@ -256,8 +256,25 @@ const ResultsTable: React.FC<Props> = ({
               if (row.action === 'ADD') actionColor = 'text-emerald-400 font-bold';
               if (row.action === 'LIQUIDATED') actionColor = 'text-red-500 font-bold bg-red-900/20';
 
-              // Check if high lev based on current snapshot
-              const isHighLev = row.leverage > 5;
+              // Formatting Ranges
+              const formatRange = (low: number, high: number, prefix: string = '') => {
+                 return (
+                     <div className="flex flex-col items-end leading-tight">
+                         <span className="text-xs text-emerald-400/80">{prefix}{Math.round(high).toLocaleString()}</span>
+                         <span className="text-rose-400/80">{prefix}{Math.round(low).toLocaleString()}</span>
+                     </div>
+                 );
+              }
+
+              const formatLevRange = (low: number, high: number) => {
+                return (
+                    <div className="flex flex-col items-center leading-tight text-xs">
+                        <span className="text-slate-400">{low.toFixed(2)}x</span>
+                        <span className="text-slate-600 mx-1">|</span>
+                        <span className="text-slate-400">{high.toFixed(2)}x</span>
+                    </div>
+                );
+              }
 
               return (
                 <tr 
@@ -306,6 +323,22 @@ const ResultsTable: React.FC<Props> = ({
                       />
                     </div>
                   </td>
+
+                  {/* Editable High Price Input */}
+                  <td className="px-4 py-3">
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-900 text-xs">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.highPrice === 0 ? '' : row.highPrice}
+                        onChange={(e) => onRowUpdate(index, 'highPrice', parseFloat(e.target.value) || 0)}
+                        className="w-24 bg-slate-900 border border-emerald-900/50 rounded px-2 py-1 pl-4 text-emerald-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-right font-mono text-xs"
+                        placeholder="High"
+                      />
+                    </div>
+                  </td>
                   
                   <td 
                     className={`px-4 py-3 text-center cursor-help ${actionColor}`}
@@ -328,7 +361,7 @@ const ResultsTable: React.FC<Props> = ({
                   </td>
 
                   <td className="px-4 py-3 text-right font-mono text-slate-400">
-                    ${Math.round(row.positionValue).toLocaleString()}
+                    {formatRange(row.positionValue, row.positionValueHigh, '$')}
                   </td>
 
                   <td className="px-4 py-3 text-right font-mono text-slate-500">
@@ -336,15 +369,15 @@ const ResultsTable: React.FC<Props> = ({
                   </td>
                   
                   <td className="px-4 py-3 text-right font-mono font-bold text-indigo-400">
-                    ${Math.round(row.equity).toLocaleString()}
+                     {formatRange(row.equity, row.equityHigh, '$')}
                   </td>
                   
-                  <td className={`px-4 py-3 text-center font-mono ${isHighLev ? 'text-orange-400' : 'text-slate-400'}`}>
-                    {row.leverage.toFixed(2)}x
+                  <td className="px-4 py-3 text-center font-mono">
+                    {formatLevRange(row.leverageHigh, row.leverage)}
                   </td>
                   
                   <td className={`px-4 py-3 text-right font-bold font-mono ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isProfit ? '+' : ''}{Math.round(row.floatingPnL).toLocaleString()}
+                    {formatRange(row.floatingPnL, row.floatingPnLHigh, isProfit ? '+' : '')}
                   </td>
                 </tr>
               );
