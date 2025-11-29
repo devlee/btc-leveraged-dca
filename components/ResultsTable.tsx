@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { WeeklyResult, WeeklyPrice } from '../types';
 
@@ -144,6 +145,14 @@ const ResultsTable: React.FC<Props> = ({
              {tooltip.row.action === 'LIQUIDATED' && (
                 <div>
                     <p className="text-rose-400 font-bold mb-1">Position Liquidated</p>
+                    {tooltip.row.theoreticalLiqPrice && tooltip.row.theoreticalLiqPrice > 0 && (
+                        <div className="mb-2 bg-rose-900/30 p-2 rounded border border-rose-900/50">
+                            <span className="text-rose-300 block text-[10px] uppercase">Est. Liquidation Price:</span>
+                            <span className="text-white font-mono font-bold text-sm">
+                                ${tooltip.row.theoreticalLiqPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    )}
                     <p className="text-slate-400 italic leading-relaxed">
                         {tooltip.row.actionReason}
                     </p>

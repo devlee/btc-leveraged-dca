@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { ComposedChart, Area, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { WeeklyResult, WeeklyPrice } from '../types';
 
@@ -15,6 +15,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     const data = payload[0].payload;
     const isProfit = data.floatingPnL >= 0;
     
+    // Format the date label (label is now ISO string from XAxis dataKey)
+    const dateLabel = new Date(label).toLocaleDateString(undefined, { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+    });
+    
     let actionColor = 'text-slate-500';
     if (data.action === 'OPEN') actionColor = 'text-blue-400 font-bold';
     if (data.action === 'ADD') actionColor = 'text-emerald-400 font-bold';
@@ -23,7 +30,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return (
       <div className="bg-slate-800 border border-slate-600 p-4 rounded-lg shadow-xl text-xs min-w-[260px] z-50 backdrop-blur-sm bg-slate-800/95">
         <div className="font-bold text-slate-100 mb-2 border-b border-slate-700 pb-2 flex justify-between items-center">
-            <span>{label}</span>
+            <span>{dateLabel}</span>
             <span className="text-slate-500 font-normal">Week {data.weekIndex}</span>
         </div>
         
@@ -77,6 +84,7 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
   const formattedData = useMemo(() => {
     return results.map(d => ({
       ...d,
+      // We keep dateShort for potential other uses, but XAxis will use 'date' (ISO)
       dateShort: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       Equity: Math.round(d.equity),
       Position: Math.round(d.positionValue),
@@ -85,7 +93,6 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
   }, [results]);
 
   // Calculate lowest price in the *full* dataset to enable the button if needed
-  // Actually, we can just look at fullData to see if there's a better entry point
   const globalLowestPrice = useMemo(() => {
       if (fullData.length === 0) return 0;
       const min = Math.min(...fullData.filter(d => d.openPrice > 0).map(d => d.openPrice));
@@ -189,10 +196,11 @@ const PerformanceChart: React.FC<Props> = ({ results, fullData, range, onRangeCh
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
             <XAxis 
-              dataKey="dateShort" 
+              dataKey="date" // Changed from dateShort to unique ISO date
               stroke="#94a3b8" 
               tick={{fontSize: 12}} 
               minTickGap={30}
+              tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
             />
             <YAxis 
               yAxisId="left"

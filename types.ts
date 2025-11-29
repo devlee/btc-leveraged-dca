@@ -1,3 +1,4 @@
+
 export interface WeeklyPrice {
   weekIndex: number;
   date: string;
@@ -9,6 +10,7 @@ export interface SimulationParams {
   initialCapital: number;
   leverage: number; // n, target leverage
   maxLeverage: number; // Liquidation threshold
+  reinvestmentRatio: number; // 0-100, percentage of "buy signal" to execute
 }
 
 export interface WeeklyResult {
@@ -25,6 +27,7 @@ export interface WeeklyResult {
   // State BEFORE action (for tooltip)
   preActionHoldings?: number;
   preActionCostBasis?: number;
+  theoreticalLiqPrice?: number; // Price at which liquidation would trigger
 
   // Snapshot AFTER action
   totalBtcHoldings: number;

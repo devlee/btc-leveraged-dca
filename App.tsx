@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { WeeklyPrice, SimulationParams, WeeklyResult } from './types';
 import { runSimulation } from './utils/simulation';
@@ -16,11 +17,12 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Ensure maxLeverage exists for older saved data
+        // Ensure new fields exist for older saved data
         return { 
           initialCapital: 10000, 
           leverage: 2.0, 
-          maxLeverage: 10, 
+          maxLeverage: 10,
+          reinvestmentRatio: 100, // Default to 100% reinvestment
           ...parsed 
         };
       } catch (e) {
@@ -31,6 +33,7 @@ const App: React.FC = () => {
       initialCapital: 10000,
       leverage: 2.0,
       maxLeverage: 10,
+      reinvestmentRatio: 100,
     };
   });
 

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SimulationParams } from '../types';
 
@@ -13,24 +14,55 @@ const InvestmentForm: React.FC<Props> = ({ params, setParams, onClear }) => {
     setParams(prev => ({ ...prev, [key]: value }));
   };
 
+  // Safe fallback if reinvestmentRatio is undefined in old state
+  const reinvestRatio = params.reinvestmentRatio ?? 100;
+
   return (
     <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700 mb-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
-        {/* Initial Capital */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-400">Initial Capital ($)</label>
-          <input
-            type="number"
-            value={params.initialCapital}
-            onChange={(e) => handleChange('initialCapital', Number(e.target.value))}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white text-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-            placeholder="e.g. 10000"
-          />
-          <p className="text-xs text-slate-500">Starting margin for the contract.</p>
+        {/* Left Column: Capital & Reinvestment Logic */}
+        <div className="space-y-6">
+            {/* Initial Capital */}
+            <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-400">Initial Capital ($)</label>
+            <input
+                type="number"
+                value={params.initialCapital}
+                onChange={(e) => handleChange('initialCapital', Number(e.target.value))}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white text-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="e.g. 10000"
+            />
+            <p className="text-xs text-slate-500">Starting margin for the contract.</p>
+            </div>
+
+            {/* Reinvestment Ratio */}
+            <div className="space-y-2 p-4 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                <label className="text-sm font-medium text-emerald-400 flex justify-between">
+                    <span>Profit Reinvestment %</span>
+                    <span className="text-white font-bold">{reinvestRatio}%</span>
+                </label>
+                <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={reinvestRatio}
+                    onChange={(e) => handleChange('reinvestmentRatio', Number(e.target.value))}
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>0% (Accumulate Cash)</span>
+                    <span>100% (Max Compound)</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                    Determines what % of the necessary buy amount is executed when profitable.
+                    <br/><span className="text-slate-500">Lower this to de-risk and take some profit off the table.</span>
+                </p>
+            </div>
         </div>
 
-        {/* Leverage */}
+        {/* Right Column: Leverage Settings */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-indigo-400">
             Target Leverage (n)
@@ -38,7 +70,7 @@ const InvestmentForm: React.FC<Props> = ({ params, setParams, onClear }) => {
           </label>
           <input
             type="range"
-            min="1.1"
+            min="1.0"
             max="5.0"
             step="0.1"
             value={params.leverage}
@@ -46,13 +78,18 @@ const InvestmentForm: React.FC<Props> = ({ params, setParams, onClear }) => {
             className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
           />
           <div className="flex justify-between text-xs text-slate-500 mt-1">
-            <span>1.1x (Safe)</span>
+            <span>1.0x (Safe)</span>
             <span>2x (Default)</span>
             <span>5x (Risky)</span>
           </div>
-          <p className="text-xs text-slate-400 mt-2">
-            Strategy: Open at {params.leverage}x. If profitable, use profits to buy more BTC to maintain {params.leverage}x. If in loss, hold.
-          </p>
+          <div className="text-xs text-slate-400 mt-2 border-t border-slate-700 pt-3">
+            Strategy Summary: 
+            <ul className="list-disc ml-4 mt-1 space-y-1 text-slate-500">
+                <li>Open position at <strong>{params.leverage}x</strong> leverage.</li>
+                <li>If profitable, use <strong>{reinvestRatio}%</strong> of the calculated rebalance amount to maintain leverage.</li>
+                <li>If in loss, HOLD (do not add funds).</li>
+            </ul>
+          </div>
         </div>
 
       </div>
